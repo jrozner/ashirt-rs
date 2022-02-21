@@ -22,11 +22,11 @@ impl Client {
         })
     }
 
-    pub fn get_operations(&self) -> Operations {
+    pub fn get_operations(&self) -> Result<Operations> {
         self.get::<Operations>("/api/operations")
     }
 
-    pub fn get_operation(&self, id: i64) -> Operation {
+    pub fn get_operation(&self, id: i64) -> Result<Operation> {
         self.get::<Operation>(&format!("/api/operations/{id}"))
     }
 
@@ -34,7 +34,7 @@ impl Client {
         unimplemented!()
     }
 
-    pub fn check_connection(&self) -> ConnectionCheck {
+    pub fn check_connection(&self) -> Result<ConnectionCheck> {
         self.get::<ConnectionCheck>("/api/checkconnection")
     }
 
@@ -42,7 +42,7 @@ impl Client {
         unimplemented!()
     }
 
-    pub fn tags_for_operation(&self, slug: &str) -> Tags {
+    pub fn tags_for_operation(&self, slug: &str) -> Result<Tags> {
         self.get::<Tags>(&format!("/api/operations/{slug}/tags"))
     }
 
@@ -50,24 +50,24 @@ impl Client {
         unimplemented!()
     }
 
-    fn get<T>(&self, path: &str) -> T
+    fn get<T>(&self, path: &str) -> Result<T>
     where
         T: DeserializeOwned,
     {
         let date = Utc::now().format("%a, %d %b %Y %H:%M:%S GMT").to_string();
         let client = reqwest::blocking::Client::new();
         let data = vec![];
-        let sig = mac_request("GET", path, &date, &data, &self.secret_key).unwrap();
+        let sig = mac_request("GET", path, &date, &data, &self.secret_key)?;
         let encoded_sig = base64::encode(&sig);
         let auth = format!("{}:{}", self.access_key, encoded_sig);
         let resp = client
             .get(format!("{}{}", self.host, path))
             .header("Date", date)
             .header("Authorization", auth)
-            .send()
-            .unwrap();
+            .send()?;
 
-        resp.json::<T>().unwrap()
+        let t = resp.json::<T>()?;
+        Ok(t)
     }
 
     fn post(&self) {}
@@ -82,7 +82,7 @@ fn mac_request(
 ) -> Result<Vec<u8>> {
     type HmacSha256 = Hmac<Sha256>;
 
-    let mut mac = HmacSha256::new_from_slice(secret_key).unwrap();
+    let mut mac = HmacSha256::new_from_slice(secret_key)?;
     mac.update(method.as_bytes());
     mac.update(b"\n");
     mac.update(uri.as_bytes());
